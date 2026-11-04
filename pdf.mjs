@@ -54,8 +54,8 @@ async function stampOriginalPages(pages,item,lib,font,bold,ink,outputDoc){
   // Posisi kotak berasal dari pengukuran PDF asli (bukan perkiraan label).
   // Tiga pilihan Wawancara 2 terletak pada x=112.8,196.2,277.0 (kotak PDF asli).
   // Draf diberi watermark DRAF di halaman, bukan tambahan teks di sekitar kotak.
-  const x2={DITERIMA:116.6,DIPERTIMBANGKAN:200,DITOLAK:280.8};
-  if(Object.hasOwn(x2,rec))drawCheck(page3,x2[rec],byTop(top+16.7),ink);
+  const x2={DITERIMA:116.7,DIPERTIMBANGKAN:200.1,DITOLAK:280.9};
+  if(Object.hasOwn(x2,rec))drawCheck(page3,x2[rec],byTop(top+18.3),lib.rgb(0,0,0));
 
   // Hanya tanggal wawancara yang diverifikasi. Ganti placeholder tanggal di
   // posisi cetakan sumber agar terbaca: Tangerang Selatan, 4 November 2026.
@@ -66,9 +66,11 @@ async function stampOriginalPages(pages,item,lib,font,bold,ink,outputDoc){
    if(date.getUTCFullYear()===yy&&date.getUTCMonth()===mm-1&&date.getUTCDate()===dd){
     const month=['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'][mm-1];
     const line='Tangerang Selatan, '+dd+' '+month+' '+yy;
-    // Opaque white overlay only inside the date field in Wawancara 2.
-    page3.drawRectangle({x:388.7,y:byTop(top+12.7),width:193,height:12.8,color:lib.rgb(1,1,1)});
-    page3.drawText(line,{x:389.3,y:byTop(top+10.5),font:bold,size:8.6,color:ink});
+    // Same exact original printed date baseline; cover placeholder and year,
+    // but NOT the frame, leaving one single clean line.
+    const baseline=byTop(top+9.85);
+    page3.drawRectangle({x:388.9,y:byTop(top+12.0),width:194,height:11.0,color:lib.rgb(1,1,1)});
+    page3.drawText(line,{x:389.3,y:baseline,font:bold,size:9,color:lib.rgb(0,0,0)});
    }
   }
 
@@ -78,10 +80,12 @@ async function stampOriginalPages(pages,item,lib,font,bold,ink,outputDoc){
    const sig=item.summaryApprovals?.alfian?.finalSignature||'';
    if(!/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(sig))throw Error('Upload tanda tangan akhir Alfian tidak tersedia/ tidak sah');
    const picture=sig.startsWith('data:image/png')?await outputDoc.embedPng(sig):await outputDoc.embedJpg(sig);
-   const dim=picture.scaleToFit(110,37);
-   // Area kosong Wawancara 2 di atas label Nama & Tanda tangan pewawancara.
-   page3.drawImage(picture,{x:395,y:byTop(top+68),width:dim.width,height:dim.height});
-   page3.drawText('Alfian Nugraha',{x:395,y:byTop(top+77),font:bold,size:8,color:ink});
+   const dim=picture.scaleToFit(115,30);
+   // Center signature within empty right cell, well above existing form label.
+   const signX=397, signTop=top+37;
+   page3.drawImage(picture,{x:signX,y:byTop(signTop+dim.height),width:dim.width,height:dim.height});
+   // Printed name immediately beneath uploaded signature (not beneath the form label).
+   page3.drawText('Alfian Nugraha',{x:signX,y:byTop(top+77),font:bold,size:9,color:lib.rgb(0,0,0)});
   }
  return {consent,isFinal};
 }
