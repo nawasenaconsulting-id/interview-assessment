@@ -6,13 +6,13 @@ function wrap(text,font,size,width){let out=[];for(const para of clean(text).spl
 // Pemetaan disusun per PDF sumber; koordinat satuan titik, origin kiri-bawah.
 // Overlay hanya pada area kosong KE-2, bukan nilai dan tanda tangan KE-1.
 const pageMappings={
- retno:{scoreX:[628,642.3,656.6,671], rows:[{page:0,y:351},{page:0,y:288},{page:0,y:221},{page:0,y:156},{page:0,y:100},{page:1,y:439},{page:1,y:379},{page:1,y:325},{page:1,y:265}],recommendationX:{DITERIMA:248,DIPERTIMBANGKAN:360,DITOLAK:532},recommendationY:409},
- debora:{scoreX:[628,642.3,656.6,671], rows:[{page:0,y:351},{page:0,y:288},{page:0,y:221},{page:0,y:156},{page:0,y:100},{page:1,y:439},{page:1,y:379},{page:1,y:325},{page:1,y:265}],recommendationX:{DITERIMA:248,DIPERTIMBANGKAN:360,DITOLAK:532},recommendationY:444},
- gumelar:{scoreX:[628,642.3,656.6,671], rows:[{page:0,y:351},{page:0,y:288},{page:0,y:221},{page:0,y:156},{page:0,y:100},{page:1,y:439},{page:1,y:379},{page:1,y:325},{page:1,y:265}],recommendationX:{DITERIMA:248,DIPERTIMBANGKAN:360,DITOLAK:532},recommendationY:397},
- hetty:{scoreX:[628,642.3,656.6,671], rows:[{page:0,y:351},{page:0,y:288},{page:0,y:221},{page:0,y:156},{page:0,y:100},{page:1,y:439},{page:1,y:379},{page:1,y:325},{page:1,y:265}],recommendationX:{DITERIMA:248,DIPERTIMBANGKAN:360,DITOLAK:532},recommendationY:420}
+ retno:{scoreX:[628,642.3,656.6,671], rows:[{page:0,y:351},{page:0,y:288},{page:0,y:221},{page:0,y:156},{page:0,y:100},{page:1,y:439},{page:1,y:379},{page:1,y:325},{page:1,y:265}],recommendationX:{DITERIMA:248,DIPERTIMBANGKAN:360,DITOLAK:532},recommendationY:409,w2Top:359},
+ debora:{scoreX:[628,642.3,656.6,671], rows:[{page:0,y:351},{page:0,y:288},{page:0,y:221},{page:0,y:156},{page:0,y:100},{page:1,y:439},{page:1,y:379},{page:1,y:325},{page:1,y:265}],recommendationX:{DITERIMA:248,DIPERTIMBANGKAN:360,DITOLAK:532},recommendationY:444,w2Top:323},
+ gumelar:{scoreX:[628,642.3,656.6,671], rows:[{page:0,y:351},{page:0,y:288},{page:0,y:221},{page:0,y:156},{page:0,y:100},{page:1,y:439},{page:1,y:379},{page:1,y:325},{page:1,y:265}],recommendationX:{DITERIMA:248,DIPERTIMBANGKAN:360,DITOLAK:532},recommendationY:397,w2Top:371},
+ hetty:{scoreX:[628,642.3,656.6,671], rows:[{page:0,y:351},{page:0,y:288},{page:0,y:221},{page:0,y:156},{page:0,y:100},{page:1,y:439},{page:1,y:379},{page:1,y:325},{page:1,y:265}],recommendationX:{DITERIMA:248,DIPERTIMBANGKAN:360,DITOLAK:532},recommendationY:420,w2Top:347}
 };
 function drawCheck(page,x,y,color){page.drawLine({start:{x:x-3,y:y-1},end:{x:x-0.5,y:y-4},thickness:1.35,color});page.drawLine({start:{x:x-0.5,y:y-4},end:{x:x+4,y:y+4},thickness:1.35,color});}
-function stampOriginalPages(pages,item,lib,font,bold,ink){
+async function stampOriginalPages(pages,item,lib,font,bold,ink,outputDoc){
  const id=String(item.candidate.id||'').toLowerCase();const map=pageMappings[id];
  if(!map)throw Error('Pemetaan koordinat PDF kandidat belum tersedia: '+item.candidate.name);
  const results=allResults(item.assessments,item.decisions,item.decisionApprovals||{});
@@ -23,23 +23,42 @@ function stampOriginalPages(pages,item,lib,font,bold,ink){
  // Kolom Kesimpulan Akhir hanya dicentang setelah finalisasi dan otorisasi tanda tangan.
  const consent=isFinal&&item.summaryApprovals?.alfian?.versionId===item.summary?.versionId&&item.summaryApprovals?.alfian?.authorizeFinalSignature===true;
  if(consent && Object.hasOwn(map.recommendationX,item.summary?.recommendation))drawCheck(pages[3],map.recommendationX[item.summary.recommendation],map.recommendationY,ink);
- // Tanda tangan akhir di area yang memang tersedia pada halaman ke-4, hanya setelah otorisasi.
+ // Hasil kolektif tercetak pada ruang WAWANCARA 2 yang kosong di PDF sumber.
+ // Semua pengisian bergantung pada keputusan bersama; Wawancara 1 tidak disentuh.
+ const page3=pages[2], top=map.w2Top, H=595.4;
+ const rec=item.summary?.recommendation;
+ if(typeof item.summary?.summary==='string'&&item.summary.summary.trim()){
+  const byTop=(t)=>H-t;
+  page3.drawText('REKAP BERSAMA (Alfian, Dekki, Raka)',{x:113,y:byTop(top+44),font:bold,size:7,color:ink});
+  let snippets=wrap(item.summary.summary,font,7.4,267);
+  if(snippets.length>5){snippets=snippets.slice(0,4);snippets.push('Lanjutan kesimpulan lengkap: lihat lampiran.');}
+  snippets.forEach((t,i)=>{if(t)page3.drawText(t,{x:113,y:byTop(top+57+i*10.5),font,size:7.4,color:ink})});
+  // Tanda centang rekomendasi hanya setelah keputusan final terverifikasi.
+  const x2={DITERIMA:115,DIPERTIMBANGKAN:198,DITOLAK:279};
+  if(consent&&Object.hasOwn(x2,rec))drawCheck(page3,x2[rec],byTop(top+24),ink);
+  // Kolom penandatangan terisi hanya jika tanda tangan Alfian benar-benar diotorisasi.
+  if(consent){
+   const sig=item.assessments?.alfian?.signature||'';
+   if(!sig.startsWith('data:image/png')&&!sig.startsWith('data:image/jpeg'))throw Error('Tanda tangan Alfian tidak tersedia untuk pengesahan formulir asli');
+   const picture=sig.startsWith('data:image/png')?await outputDoc.embedPng(sig):await outputDoc.embedJpg(sig);
+   const dim=picture.scaleToFit(110,35);
+   page3.drawImage(picture,{x:403,y:byTop(top+103),width:dim.width,height:dim.height});
+   page3.drawText('Alfian Nugraha (hasil bersama)',{x:394,y:byTop(top+114),font:bold,size:8,color:ink});
+   const finalized=String(item.final?.at||'').slice(0,10);
+   if(/^\d{4}-\d{2}-\d{2}$/.test(finalized))page3.drawText('Tanggal pengesahan: '+finalized,{x:394,y:byTop(top+48),font,size:7,color:ink});
+  }
+ }
  return {consent,isFinal};
 }
 export async function makePdf(items){const lib=await pdfLib();const doc=await lib.PDFDocument.create(),normal=await doc.embedFont(lib.StandardFonts.Helvetica),bold=await doc.embedFont(lib.StandardFonts.HelveticaBold),ink=lib.rgb(.10,.20,.32),sub=lib.rgb(.4,.46,.55);const W=841.89,H=595.28;
-for(const item of items){const orig=await lib.PDFDocument.load(item.source);if(orig.getPageCount()!==4)throw Error('Jumlah halaman PDF sumber tidak sesuai: '+item.candidate.name);const copied=await doc.copyPages(orig,orig.getPageIndices());copied.forEach(p=>doc.addPage(p));const status=stampOriginalPages(copied,item,lib,normal,bold,ink);let p,y;
+for(const item of items){const orig=await lib.PDFDocument.load(item.source);if(orig.getPageCount()!==4)throw Error('Jumlah halaman PDF sumber tidak sesuai: '+item.candidate.name);const copied=await doc.copyPages(orig,orig.getPageIndices());copied.forEach(p=>doc.addPage(p));const status=await stampOriginalPages(copied,item,lib,normal,bold,ink,doc);let p,y;
 const newPage=title=>{p=doc.addPage([W,H]);y=H-44;p.drawText(clean(title),{x:43,y,font:bold,size:15,color:ink});y-=29;p.drawText(clean(`${item.candidate.name} | ${item.candidate.position}`),{x:43,y,font:normal,size:10,color:sub});y-=32;p.drawText('Lampiran: halaman PDF sumber tetap utuh tanpa perubahan.',{x:43,y:25,font:normal,size:8,color:sub})};
 const ensure=(n=25)=>{if(y-n<47)newPage('LAMPIRAN PENILAIAN - LANJUTAN')};
 const line=(text,size=10,emphasis=false,indent=0)=>{const font=emphasis?bold:normal;for(const ln of wrap(text,font,size,740-indent)){ensure(size+6);if(ln)p.drawText(ln,{x:43+indent,y,font,size,color:ink});y-=size+6}};
-newPage('LAMPIRAN KOMENTAR INDIVIDUAL - ARSIP');
-line('Penilaian akhir mengacu pada REKAP MAYORITAS, bukan skor salah satu pewawancara.',9,true);
-line('Komentar dan rekomendasi masing-masing penilai ditampilkan utuh sebagai jejak audit.',9);y-=12;
-for(const id of reviewerIds){const a=item.assessments[id]||{};ensure(75);line(reviewerNames[id],12,true);line('Rekomendasi individual: '+(a.recommendation||'Belum tersedia'),9);line('Komentar asli:',9,true);line(a.comment||'(belum ada komentar)',10);y-=15;}
-newPage('LAMPIRAN REKAPITULASI MAYORITAS');const groups={};Object.entries(item.decisionApprovals||{}).forEach(([k,v])=>{groups[k]=v});const rows=allResults(item.assessments,item.decisions,groups);line('Isian kolom KE-2 pada halaman 1-2 adalah skor REKAP MAYORITAS tiga penilai.',9,true);line('Metode keputusan: mayoritas 2 dari 3 suara. Nilai berbeda membutuhkan persetujuan bersama.',9);y-=8;
-for(const r of rows){ensure(30);line(`${r.i+1}. ${r.name} | Alfian: ${r.votes[0]??'-'} | Dekki: ${r.votes[1]??'-'} | Raka: ${r.votes[2]??'-'} | Final: ${r.final??'-'} (${r.status})`,9)}y-=12;line('Skor final di atas merupakan nilai hasil mayoritas 2 dari 3 atau keputusan bersama yang disetujui.',9);line('Total skor/bobot hanya diisi bila rumus asli sudah dipetakan dan diverifikasi.',9);y-=15;
-line('REKAP KOMENTAR KAMI - KOMENTAR INDIVIDUAL TETAP ASLI',11,true);for(const id of reviewerIds){line(reviewerNames[id]+':',10,true);line(item.assessments[id]?.comment||'(belum ada komentar)',9);y-=8}
-ensure(120);line('KESIMPULAN DAN REKOMENDASI KAMI',13,true);line(item.summary?.summary||'(belum disusun)',10);y-=8;line('Perbedaan pendapat:',10,true);line(item.summary?.differences||'Tidak dicatat.',10);y-=8;line('Rekomendasi Kami: '+(item.summary?.recommendation||'BELUM FINAL'),11,true);line('Status final: '+(item.final?.validation==='SERVER_VERIFIED_V1'?'FINAL TERVERIFIKASI SERVER '+item.final.at:'DRAF - BELUM FINAL'),9);
-line('Tanggal wawancara (dari data kandidat): '+(item.candidate.firstDate||'Belum tercatat'),9);
+newPage('LAMPIRAN REKAPITULASI MAYORITAS');const groups={};Object.entries(item.decisionApprovals||{}).forEach(([k,v])=>{groups[k]=v});const rows=allResults(item.assessments,item.decisions,groups);line('Isian kolom KE-2 pada halaman 1-2 adalah skor REKAP MAYORITAS tiga penilai.',9,true);line('Metode keputusan: mayoritas 2 dari 3 suara atau keputusan bersama yang disetujui.',9);y-=8;
+for(const r of rows){ensure(30);line(`${r.i+1}. ${r.name} | Skor akhir: ${r.final??'-'} (${r.final!==null?'Terverifikasi':'Belum final'})`,9)}y-=12;line('Skor final di atas merupakan nilai hasil mayoritas 2 dari 3 atau keputusan bersama yang disetujui.',9);line('Total skor/bobot hanya diisi bila rumus asli sudah dipetakan dan diverifikasi.',9);y-=15;
+ensure(120);line('KESIMPULAN DAN REKOMENDASI KAMI',13,true);line(item.summary?.summary||'(belum disusun)',10);y-=8;line('Rekomendasi Kami: '+(item.summary?.recommendation||'BELUM FINAL'),11,true);line('Status final: '+(item.final?.validation==='SERVER_VERIFIED_V1'?'FINAL TERVERIFIKASI SERVER '+item.final.at:'DRAF - BELUM FINAL'),9);
+line('Tanggal wawancara pertama (arsip asli): '+(item.candidate.firstDate||'Belum tercatat'),9);
 line('Tanggal finalisasi server: '+(item.final?.at||'Belum final'),9);
 const alfian=item.assessments.alfian||{};
 const authSignature=Boolean(status.consent);
