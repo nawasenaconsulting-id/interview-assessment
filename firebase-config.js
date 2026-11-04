@@ -1,20 +1,20 @@
 // Isi HANYA konfigurasi publik Firebase Web App dari Project Settings.
 // API key Firebase web bukan password; keamanan data berasal dari Firestore Rules dan Auth.
 export const firebaseConfig = {
-  apiKey: "ISI_FIREBASE_API_KEY",
-  authDomain: "ISI_PROJECT_ID.firebaseapp.com",
-  projectId: "ISI_PROJECT_ID",
-  appId: "ISI_FIREBASE_APP_ID"
+  apiKey: "AIzaSyCEoOJN93eT5koJfMo_kvhfCwYk_M3i4pw",
+  authDomain: "interview-manager-fat-bwbyaz.firebaseapp.com",
+  projectId: "interview-manager-fat-bwbyaz",
+  appId: "1:229872391278:web:a009d75a1a759d15ba027f"
 };
 
 // Alamat email login masing-masing akun Firebase Authentication.
 // Email bukan rahasia; jangan pernah masukkan password atau PIN ke file ini.
 export const reviewerLoginEmails = {
-  alfian: "ISI_EMAIL_ALFIAN",
-  dekki: "ISI_EMAIL_DEKKI",
-  raka: "ISI_EMAIL_RAKA"
+  alfian: "alfian1715@gmail.com",
+  dekki: "dekz9000@gmail.com",
+  raka: "raka.adikrisnha@gmail.com"
 };
 
 // URL Cloudflare Worker administrasi, contoh https://interview-admin.nama.workers.dev
 // Jangan masukkan secret Google atau kata sandi siapa pun di file ini.
-export const adminApiBase = "ISI_URL_CLOUDFLARE_WORKER";
+export const adminApiBase = "https://interview-assessment-admin.nawasenaconsulting-id.workers.dev";
