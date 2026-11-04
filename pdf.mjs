@@ -11,6 +11,21 @@ const pageMappings={
  gumelar:{scoreX:[628,642.3,656.6,671], rows:[{page:0,y:351},{page:0,y:288},{page:0,y:221},{page:0,y:156},{page:0,y:100},{page:1,y:439},{page:1,y:379},{page:1,y:325},{page:1,y:265}],recommendationX:{DITERIMA:248,DIPERTIMBANGKAN:360,DITOLAK:532},recommendationY:397,w2Top:371},
  hetty:{scoreX:[628,642.3,656.6,671], rows:[{page:0,y:351},{page:0,y:288},{page:0,y:221},{page:0,y:156},{page:0,y:100},{page:1,y:439},{page:1,y:379},{page:1,y:325},{page:1,y:265}],recommendationX:{DITERIMA:248,DIPERTIMBANGKAN:360,DITOLAK:532},recommendationY:420,w2Top:347}
 };
+// Rata kiri-kanan per baris di area Saran/Komentar. Baris terakhir tetap rata kiri.
+function drawJustifiedLines(page,lines,font,size,x,rightX,firstY,lineHeight,color){
+ const maxWidth=rightX-x;
+ for(let i=0;i<lines.length;i++){
+  const text=lines[i];if(!text)continue;
+  const y=firstY-i*lineHeight;
+  const words=text.trim().split(/\s+/);
+  if(i===lines.length-1||words.length<2){page.drawText(text,{x,y,font,size,color});continue;}
+  const sumWidths=words.reduce((n,w)=>n+font.widthOfTextAtSize(w,size),0);
+  const gap=(maxWidth-sumWidths)/(words.length-1);
+  if(gap<0){page.drawText(text,{x,y,font,size,color});continue;}
+  let cursor=x;
+  for(const word of words){page.drawText(word,{x:cursor,y,font,size,color});cursor+=font.widthOfTextAtSize(word,size)+gap;}
+ }
+}
 function drawCheck(page,x,y,color){page.drawLine({start:{x:x-3,y:y-1},end:{x:x-0.5,y:y-4},thickness:1.35,color});page.drawLine({start:{x:x-0.5,y:y-4},end:{x:x+4,y:y+4},thickness:1.35,color});}
 async function stampOriginalPages(pages,item,lib,font,bold,ink,outputDoc){
  const id=String(item.candidate.id||'').toLowerCase();const map=pageMappings[id];
@@ -29,10 +44,11 @@ async function stampOriginalPages(pages,item,lib,font,bold,ink,outputDoc){
  const rec=item.summary?.recommendation;
  if(typeof item.summary?.summary==='string'&&item.summary.summary.trim()){
   const byTop=(t)=>H-t;
-  page3.drawText('REKAP BERSAMA (Alfian, Dekki, Raka)',{x:113,y:byTop(top+44),font:bold,size:7,color:ink});
-  let snippets=wrap(item.summary.summary,font,7.4,267);
-  if(snippets.length>5){snippets=snippets.slice(0,4);snippets.push('Lanjutan kesimpulan lengkap: lihat lampiran.');}
-  snippets.forEach((t,i)=>{if(t)page3.drawText(t,{x:113,y:byTop(top+57+i*10.5),font,size:7.4,color:ink})});
+  // Teks isi saja: tanpa judul "REKAP BERSAMA" atau nama-nama penilai.
+  // Batas kanan x=380 (kotak berakhir kira-kira x=388); 6 baris aman dalam kotak.
+  const lines=wrap(item.summary.summary,font,7.4,267);
+  const snippets=lines.length>6?[...lines.slice(0,5),'Kesimpulan lengkap: lihat lampiran.']:lines;
+  drawJustifiedLines(page3,snippets,font,7.4,113,380,byTop(top+44),10.5,ink);
   // Tanda centang rekomendasi hanya setelah keputusan final terverifikasi.
   const x2={DITERIMA:115,DIPERTIMBANGKAN:198,DITOLAK:279};
   if(consent&&Object.hasOwn(x2,rec))drawCheck(page3,x2[rec],byTop(top+24),ink);
