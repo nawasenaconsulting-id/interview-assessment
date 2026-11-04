@@ -36,7 +36,7 @@ async function stampOriginalPages(pages,item,lib,font,bold,ink,outputDoc){
  // DRAF merupakan penanda tambahan, tidak mengganti isi halaman sumber.
  if(!isFinal)for(const p of pages){p.drawText('DRAF - BELUM FINAL', {x:660,y:564,font:bold,size:10,color:lib.rgb(.75,.13,.12)})}
  // Kolom Kesimpulan Akhir hanya dicentang setelah finalisasi dan otorisasi tanda tangan.
- const consent=isFinal&&item.summaryApprovals?.alfian?.versionId===item.summary?.versionId&&item.summaryApprovals?.alfian?.authorizeFinalSignature===true;
+ const consent=isFinal&&item.summaryApprovals?.alfian?.versionId===item.summary?.versionId&&item.summaryApprovals?.alfian?.authorizeFinalSignature===true&&Boolean(item.summaryApprovals?.alfian?.finalSignature);
  if(consent && Object.hasOwn(map.recommendationX,item.summary?.recommendation))drawCheck(pages[3],map.recommendationX[item.summary.recommendation],map.recommendationY,ink);
  // Hasil kolektif tercetak pada ruang WAWANCARA 2 yang kosong di PDF sumber.
  // Semua pengisian bergantung pada keputusan bersama; Wawancara 1 tidak disentuh.
@@ -51,31 +51,37 @@ async function stampOriginalPages(pages,item,lib,font,bold,ink,outputDoc){
   drawJustifiedLines(page3,snippets,font,7.4,113,380,byTop(top+44),10.5,ink);
 
  }
-  // Centang pada PDF DRAF adalah simulasi; pada PDF final harus terverifikasi.
-  const x2={DITERIMA:115,DIPERTIMBANGKAN:198,DITOLAK:279};
-  // Draf: centang biru bersifat SIMULASI, bukan keputusan resmi.
-  if(Object.hasOwn(x2,rec)){
-   drawCheck(page3,x2[rec],byTop(top+24),consent?ink:lib.rgb(.10,.42,.76));
-   if(!consent)page3.drawText('DRAF - PILIHAN BELUM DISAHKAN',{x:113,y:byTop(top+34),font,size:5.8,color:lib.rgb(.10,.42,.76)});
-  }
+  // Posisi kotak berasal dari pengukuran PDF asli (bukan perkiraan label).
+  // Tiga pilihan Wawancara 2 terletak pada x=112.8,196.2,277.0 (kotak PDF asli).
+  // Draf diberi watermark DRAF di halaman, bukan tambahan teks di sekitar kotak.
+  const x2={DITERIMA:116.6,DIPERTIMBANGKAN:200,DITOLAK:280.8};
+  if(Object.hasOwn(x2,rec))drawCheck(page3,x2[rec],byTop(top+16.7),ink);
 
-  // Kolom penandatangan terisi hanya jika tanda tangan Alfian benar-benar diotorisasi.
-  // Nama penandatangan boleh tampil pada draf, tetapi tanda tangan hanya setelah izin final.
-  if(!consent)page3.drawText('Calon penandatangan: Alfian Nugraha',{x:394,y:byTop(top+109),font,size:7.2,color:ink});
+  // Hanya tanggal wawancara yang diverifikasi. Ganti placeholder tanggal di
+  // posisi cetakan sumber agar terbaca: Tangerang Selatan, 4 November 2026.
   const verifiedDate=String(item.summary?.interviewDate||'');
   if(/^\d{4}-\d{2}-\d{2}$/.test(verifiedDate)){
-   const [yy,mm,dd]=verifiedDate.split('-');
-   page3.drawText('Tanggal wawancara: '+dd+'-'+mm+'-'+yy,{x:394,y:byTop(top+50),font,size:7.2,color:ink});
+   const [yy,mm,dd]=verifiedDate.split('-').map(Number);
+   const date=new Date(Date.UTC(yy,mm-1,dd));
+   if(date.getUTCFullYear()===yy&&date.getUTCMonth()===mm-1&&date.getUTCDate()===dd){
+    const month=['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'][mm-1];
+    const line='Tangerang Selatan, '+dd+' '+month+' '+yy;
+    // Opaque white overlay only inside the date field in Wawancara 2.
+    page3.drawRectangle({x:388.7,y:byTop(top+12.7),width:193,height:12.8,color:lib.rgb(1,1,1)});
+    page3.drawText(line,{x:389.3,y:byTop(top+10.5),font:bold,size:8.6,color:ink});
+   }
   }
+
+  // Tanda tangan akhir HANYA berasal dari upload Alfian yang disetujui
+  // untuk versi kesimpulan ini dan setelah status finalisasi server valid.
   if(consent){
-   const sig=item.assessments?.alfian?.signature||'';
-   if(!sig.startsWith('data:image/png')&&!sig.startsWith('data:image/jpeg'))throw Error('Tanda tangan Alfian tidak tersedia untuk pengesahan formulir asli');
+   const sig=item.summaryApprovals?.alfian?.finalSignature||'';
+   if(!/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(sig))throw Error('Upload tanda tangan akhir Alfian tidak tersedia/ tidak sah');
    const picture=sig.startsWith('data:image/png')?await outputDoc.embedPng(sig):await outputDoc.embedJpg(sig);
-   const dim=picture.scaleToFit(110,35);
-   page3.drawImage(picture,{x:403,y:byTop(top+103),width:dim.width,height:dim.height});
-   page3.drawText('Alfian Nugraha (hasil bersama)',{x:394,y:byTop(top+114),font:bold,size:8,color:ink});
-   const finalized=String(item.final?.at||'').slice(0,10);
-   if(/^\d{4}-\d{2}-\d{2}$/.test(finalized))page3.drawText('Disahkan: '+finalized,{x:394,y:byTop(top+60),font,size:7,color:ink});
+   const dim=picture.scaleToFit(110,37);
+   // Area kosong Wawancara 2 di atas label Nama & Tanda tangan pewawancara.
+   page3.drawImage(picture,{x:395,y:byTop(top+68),width:dim.width,height:dim.height});
+   page3.drawText('Alfian Nugraha',{x:395,y:byTop(top+77),font:bold,size:8,color:ink});
   }
  return {consent,isFinal};
 }
@@ -92,8 +98,8 @@ line('Tanggal finalisasi server: '+(item.final?.at||'Belum final'),9);
 const alfian=item.assessments.alfian||{};
 const authSignature=Boolean(status.consent);
 ensure(140);line('PENANDATANGAN AKHIR: ALFIAN NUGRAHA',11,true);
-if(authSignature&&alfian.signature?.startsWith('data:image/')){
- try{const sig=alfian.signature.startsWith('data:image/png')?await doc.embedPng(alfian.signature):await doc.embedJpg(alfian.signature),dim=sig.scaleToFit(220,72);ensure(95);p.drawImage(sig,{x:43,y:y-78,width:dim.width,height:dim.height});y-=94;line('Tanda tangan Alfian diotorisasi untuk versi Kesimpulan Kami ini.',9)}
+if(authSignature&&item.summaryApprovals?.alfian?.finalSignature?.startsWith('data:image/')){
+ try{const signData=item.summaryApprovals.alfian.finalSignature;const sig=signData.startsWith('data:image/png')?await doc.embedPng(signData):await doc.embedJpg(signData),dim=sig.scaleToFit(220,72);ensure(95);p.drawImage(sig,{x:43,y:y-78,width:dim.width,height:dim.height});y-=94;line('Tanda tangan Alfian diotorisasi untuk versi Kesimpulan Kami ini.',9)}
  catch{throw Error('Tanda tangan akhir Alfian tidak bisa dirender; PDF final dibatalkan')}
 }else{line('Tanda tangan akhir belum diotorisasi. Draf ini tidak dapat digunakan sebagai PDF final.',9)}
 line('Persetujuan versi Kami: '+reviewerIds.map(id=>reviewerNames[id]+': '+(item.summaryApprovals[id]?.versionId===item.summary?.versionId?'setuju':'belum')).join('; '),8);
