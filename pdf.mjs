@@ -35,9 +35,10 @@ async function stampOriginalPages(pages,item,lib,font,bold,ink,outputDoc){
  for(const r of results){if(!Number.isInteger(r.final)||r.final<1||r.final>4)continue;const pos=map.rows[r.i];drawCheck(pages[pos.page],map.scoreX[r.final-1],pos.y,ink)}
  // DRAF merupakan penanda tambahan, tidak mengganti isi halaman sumber.
  if(!isFinal)for(const p of pages){p.drawText('DRAF - BELUM FINAL', {x:660,y:564,font:bold,size:10,color:lib.rgb(.75,.13,.12)})}
- // Kolom Kesimpulan Akhir hanya dicentang setelah finalisasi dan otorisasi tanda tangan.
+ // Kesimpulan Akhir sengaja dibiarkan kosong: masih ada Wawancara 3.
+ // Status FINAL hanya mengesahkan Wawancara 2, bukan keputusan akhir seleksi.
+ // Persetujuan tanda tangan Alfian tetap digunakan khusus pada Wawancara 2.
  const consent=isFinal&&item.summaryApprovals?.alfian?.versionId===item.summary?.versionId&&item.summaryApprovals?.alfian?.authorizeFinalSignature===true&&Boolean(item.summaryApprovals?.alfian?.finalSignature);
- if(consent && Object.hasOwn(map.recommendationX,item.summary?.recommendation))drawCheck(pages[3],map.recommendationX[item.summary.recommendation],map.recommendationY,ink);
  // Hasil kolektif tercetak pada ruang WAWANCARA 2 yang kosong di PDF sumber.
  // Semua pengisian bergantung pada keputusan bersama; Wawancara 1 tidak disentuh.
  const page3=pages[2], top=map.w2Top, H=595.4;
