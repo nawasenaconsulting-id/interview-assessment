@@ -17,4 +17,5 @@ export const reviewerLoginEmails = {
 
 // URL Cloudflare Worker administrasi, contoh https://interview-admin.nama.workers.dev
 // Jangan masukkan secret Google atau kata sandi siapa pun di file ini.
-export const adminApiBase ="https://nawasena-api-pages.pages.dev";
+export const adminApiBase =
+  "https://nawasena-api-pages.pages.dev";
