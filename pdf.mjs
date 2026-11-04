@@ -42,20 +42,23 @@ async function stampOriginalPages(pages,item,lib,font,bold,ink,outputDoc){
  // Semua pengisian bergantung pada keputusan bersama; Wawancara 1 tidak disentuh.
  const page3=pages[2], top=map.w2Top, H=595.4;
  const rec=item.summary?.recommendation;
+ const byTop=(t)=>H-t;
  if(typeof item.summary?.summary==='string'&&item.summary.summary.trim()){
-  const byTop=(t)=>H-t;
   // Teks isi saja: tanpa judul "REKAP BERSAMA" atau nama-nama penilai.
   // Batas kanan x=380 (kotak berakhir kira-kira x=388); 6 baris aman dalam kotak.
   const lines=wrap(item.summary.summary,font,7.4,267);
   const snippets=lines.length>6?[...lines.slice(0,5),'Kesimpulan lengkap: lihat lampiran.']:lines;
   drawJustifiedLines(page3,snippets,font,7.4,113,380,byTop(top+44),10.5,ink);
-  // Tanda centang rekomendasi hanya setelah keputusan final terverifikasi.
+
+ }
+  // Centang pada PDF DRAF adalah simulasi; pada PDF final harus terverifikasi.
   const x2={DITERIMA:115,DIPERTIMBANGKAN:198,DITOLAK:279};
   // Draf: centang biru bersifat SIMULASI, bukan keputusan resmi.
   if(Object.hasOwn(x2,rec)){
    drawCheck(page3,x2[rec],byTop(top+24),consent?ink:lib.rgb(.10,.42,.76));
    if(!consent)page3.drawText('DRAF - PILIHAN BELUM DISAHKAN',{x:113,y:byTop(top+34),font,size:5.8,color:lib.rgb(.10,.42,.76)});
   }
+
   // Kolom penandatangan terisi hanya jika tanda tangan Alfian benar-benar diotorisasi.
   // Nama penandatangan boleh tampil pada draf, tetapi tanda tangan hanya setelah izin final.
   if(!consent)page3.drawText('Calon penandatangan: Alfian Nugraha',{x:394,y:byTop(top+109),font,size:7.2,color:ink});
@@ -74,7 +77,6 @@ async function stampOriginalPages(pages,item,lib,font,bold,ink,outputDoc){
    const finalized=String(item.final?.at||'').slice(0,10);
    if(/^\d{4}-\d{2}-\d{2}$/.test(finalized))page3.drawText('Disahkan: '+finalized,{x:394,y:byTop(top+60),font,size:7,color:ink});
   }
- }
  return {consent,isFinal};
 }
 export async function makePdf(items){const lib=await pdfLib();const doc=await lib.PDFDocument.create(),normal=await doc.embedFont(lib.StandardFonts.Helvetica),bold=await doc.embedFont(lib.StandardFonts.HelveticaBold),ink=lib.rgb(.10,.20,.32),sub=lib.rgb(.4,.46,.55);const W=841.89,H=595.28;
