@@ -51,8 +51,19 @@ async function stampOriginalPages(pages,item,lib,font,bold,ink,outputDoc){
   drawJustifiedLines(page3,snippets,font,7.4,113,380,byTop(top+44),10.5,ink);
   // Tanda centang rekomendasi hanya setelah keputusan final terverifikasi.
   const x2={DITERIMA:115,DIPERTIMBANGKAN:198,DITOLAK:279};
-  if(consent&&Object.hasOwn(x2,rec))drawCheck(page3,x2[rec],byTop(top+24),ink);
+  // Draf: centang biru bersifat SIMULASI, bukan keputusan resmi.
+  if(Object.hasOwn(x2,rec)){
+   drawCheck(page3,x2[rec],byTop(top+24),consent?ink:lib.rgb(.10,.42,.76));
+   if(!consent)page3.drawText('DRAF - PILIHAN BELUM DISAHKAN',{x:113,y:byTop(top+34),font,size:5.8,color:lib.rgb(.10,.42,.76)});
+  }
   // Kolom penandatangan terisi hanya jika tanda tangan Alfian benar-benar diotorisasi.
+  // Nama penandatangan boleh tampil pada draf, tetapi tanda tangan hanya setelah izin final.
+  if(!consent)page3.drawText('Calon penandatangan: Alfian Nugraha',{x:394,y:byTop(top+109),font,size:7.2,color:ink});
+  const verifiedDate=String(item.summary?.interviewDate||'');
+  if(/^\d{4}-\d{2}-\d{2}$/.test(verifiedDate)){
+   const [yy,mm,dd]=verifiedDate.split('-');
+   page3.drawText('Tanggal wawancara: '+dd+'-'+mm+'-'+yy,{x:394,y:byTop(top+50),font,size:7.2,color:ink});
+  }
   if(consent){
    const sig=item.assessments?.alfian?.signature||'';
    if(!sig.startsWith('data:image/png')&&!sig.startsWith('data:image/jpeg'))throw Error('Tanda tangan Alfian tidak tersedia untuk pengesahan formulir asli');
@@ -61,7 +72,7 @@ async function stampOriginalPages(pages,item,lib,font,bold,ink,outputDoc){
    page3.drawImage(picture,{x:403,y:byTop(top+103),width:dim.width,height:dim.height});
    page3.drawText('Alfian Nugraha (hasil bersama)',{x:394,y:byTop(top+114),font:bold,size:8,color:ink});
    const finalized=String(item.final?.at||'').slice(0,10);
-   if(/^\d{4}-\d{2}-\d{2}$/.test(finalized))page3.drawText('Tanggal pengesahan: '+finalized,{x:394,y:byTop(top+48),font,size:7,color:ink});
+   if(/^\d{4}-\d{2}-\d{2}$/.test(finalized))page3.drawText('Disahkan: '+finalized,{x:394,y:byTop(top+60),font,size:7,color:ink});
   }
  }
  return {consent,isFinal};
