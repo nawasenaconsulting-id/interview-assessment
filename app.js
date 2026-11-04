@@ -50,33 +50,36 @@ cv.onpointerup=()=>{if(!drawing)return;drawing=false;draft.signature=cv.toDataUR
 $('clearSignature').onclick=()=>{if(!own())return;ctx.clearRect(0,0,cv.width,cv.height);draft.signature='';draft.signedAt='';markDirty()};
 $('signFile').onchange=e=>{const file=e.target.files[0];if(!file)return;if(!['image/jpeg','image/png'].includes(file.type)||file.size>400000)return notify('Gunakan JPG/PNG maksimal 400KB');const reader=new FileReader();reader.onload=()=>{const im=new Image();im.onload=()=>{ctx.clearRect(0,0,cv.width,cv.height);ctx.drawImage(im,0,0,cv.width,cv.height);draft.signature=cv.toDataURL('image/png');draft.signedAt=now();markDirty()};im.src=reader.result};reader.readAsDataURL(file)};
 function renderRecap(results){$('recapRows').innerHTML=results.map(r=>{const d=decisions[r.i],group=groupApprovals()[r.i]||{},yes=d?reviewerIds.filter(id=>group[id]?.proposalId===d.proposalId):[];let action='';if(r.status==='Tidak Ada Mayoritas'&&account.role==='admin'&&!final){action=`<select id="decision-${r.i}"><option value="">Nilai</option>${[1,2,3,4].map(v=>`<option>${v}</option>`).join('')}</select><button data-propose="${r.i}">Ajukan</button>`}if(r.status==='Menunggu konfirmasi')action=`Usulan ${d.value} (${yes.length}/3) ${account.role==='reviewer'&&!yes.includes(account.reviewerId)?`<button data-approve-decision="${r.i}">Setujui</button>`:''}`;return `<tr><td>${r.i+1}</td><td>${safe(r.name)}</td>${r.votes.map(v=>`<td>${v??'—'}</td>`).join('')}<td>${Object.entries(r.counts).map(([v,n])=>`${v}: ${n} suara`).join(', ')||'—'}</td><td><b>${r.final??'—'}</b></td><td><span class="tag ${r.final!==null?'ok':'warn'}">${r.status}</span> ${action}</td></tr>`}).join('');document.querySelectorAll('[data-propose]').forEach(b=>b.onclick=async()=>{const i=+b.dataset.propose,v=+$('decision-'+i).value;if(![1,2,3,4].includes(v))return notify('Pilih nilai usulan');try{await setDoc(subref('decisions',String(i)),{value:v,proposalId:crypto.randomUUID(),proposedAt:now(),proposedBy:account.uid});notify('Usulan baru telah disimpan; perlu 3 persetujuan.')}catch(e){toastError(e)}});document.querySelectorAll('[data-approve-decision]').forEach(b=>b.onclick=async()=>{const i=+b.dataset.approveDecision;try{await setDoc(subref('decisionApprovals',`${i}_${account.reviewerId}`),{proposalId:decisions[i].proposalId,index:i,reviewerId:account.reviewerId,approvedAt:now()});notify('Persetujuan tersimpan')}catch(e){toastError(e)}})}
-// Fallback lokal ketika AI tidak dapat dijangkau. Tidak membuat rekomendasi atau fakta baru.
+// Draf lokal konservatif. Mengolah tema eksplisit tanpa menyalin kutipan mentah.
+// Tidak mengambil keputusan akhir atau mengubah dokumen yang sudah final.
 function buildJointDraft(){
  const missing=reviewerIds.filter(id=>!assessments[id]?.completed||!assessments[id]?.comment?.trim()||!assessments[id]?.recommendation);
  if(missing.length)throw Error('Lengkapi dan kunci komentar/rekomendasi: '+missing.map(id=>reviewerNames[id]).join(', '));
- const inputs=reviewerIds.map(id=>String(assessments[id].comment).toLowerCase().replace(/\s+/g,' '));
- const text=inputs.join(' ');
- const concerns=/kurang|belum|tidak siap|perlu|lemah|minim|sulit|tidak mudah/.test(text);
- const preparation=/persiap|kesiapan|kurang siap/.test(text);
- const motivation=/motivasi|kurang niat|niat/.test(text);
- const communication=/komunikasi|berbicara|menyampaikan/.test(text);
- const experience=/pengalaman|riwayat kerja/.test(text);
- const technical=/teknis|keahlian|kompetensi/.test(text);
+ const comments=reviewerIds.map(id=>String(assessments[id].comment||'').toLowerCase().replace(/\s+/g,' ').trim());
+ const text=comments.join(' | ');
+ // Hanya inferensi terbatas dari tema yang jelas. Frasa ambigu seperti
+ // "tidak mudah", "cuma ngetes", atau "kurang banget" tidak ditafsirkan sendiri.
+ const has=pattern=>pattern.test(text);
+ const preparation=has(/\b(persiapan|mempersiapkan|kurang siap|belum siap|kesiapan)\b/i);
+ const motivation=has(/\b(kurang niat|tidak berniat|motivasi|kesungguhan|antusiasme)\b/i);
+ const communication=has(/\b(komunikasi|penyampaian|menjelaskan|berkomunikasi)\b/i);
+ const experience=has(/\b(pengalaman kerja|pengalaman profesional|rekam jejak)\b/i);
+ const technical=has(/\b(kompetensi teknis|kemampuan teknis|penguasaan teknis|pengetahuan teknis)\b/i);
+ const concerns=has(/\b(kurang|belum|lemah|terbatas|perlu ditingkatkan|perlu pendalaman|tidak mampu)\b/i);
+ const topics=[preparation&&'persiapan mengikuti wawancara',motivation&&'motivasi yang ditunjukkan',communication&&'komunikasi',experience&&'pengalaman kerja',technical&&'kompetensi teknis'].filter(Boolean);
  let summary;
- if(concerns&&(preparation||motivation)){
-  const focus=preparation&&motivation?'persiapan dan motivasi dalam mengikuti proses seleksi':preparation?'persiapan mengikuti proses seleksi':'motivasi mengikuti proses seleksi';
-  summary='Berdasarkan hasil wawancara, kami mencatat bahwa kesiapan kandidat masih memerlukan perhatian lebih lanjut, khususnya terkait '+focus+'. Aspek tersebut menjadi bahan evaluasi untuk menentukan kesesuaian kandidat dengan kebutuhan posisi yang dilamar.';
- } else if(concerns&&(communication||experience||technical)){
-  const subjects=[communication&&'kemampuan komunikasi',experience&&'pengalaman kerja',technical&&'kompetensi teknis'].filter(Boolean);
-  summary='Berdasarkan hasil wawancara, kami mencatat sejumlah aspek yang memerlukan pendalaman, terutama '+subjects.join(', ')+'. Catatan tersebut perlu ditinjau kembali berdasarkan keseluruhan hasil penilaian sebelum keputusan akhir ditetapkan.';
- } else if(!concerns&&(communication||experience||technical)){
-  const subjects=[communication&&'komunikasi',experience&&'pengalaman kerja',technical&&'kompetensi teknis'].filter(Boolean);
-  summary='Berdasarkan hasil wawancara, kami mencatat sejumlah hal yang berkaitan dengan '+subjects.join(', ')+'. Penilaian atas aspek-aspek tersebut perlu dipertimbangkan bersama dengan hasil evaluasi kriteria lainnya untuk menentukan kesesuaian kandidat dengan posisi yang dilamar.';
- } else {
-  // Komentar terlalu umum untuk disimpulkan aman secara semantik; jangan mengarang fakta.
-  summary='Berdasarkan hasil wawancara, kami telah meninjau catatan penilaian yang disampaikan. Informasi yang tersedia masih perlu diperjelas agar kesimpulan dapat menggambarkan kondisi kandidat secara tepat. Kesimpulan akhir akan ditetapkan setelah evaluasi hasil wawancara secara menyeluruh.';
+ if(preparation||motivation){
+  const subjects=[preparation&&'persiapan',motivation&&'motivasi'].filter(Boolean).join(' dan ');
+  summary='Berdasarkan hasil wawancara, kami mencatat bahwa kesiapan kandidat masih perlu mendapat perhatian, khususnya terkait '+subjects+' dalam mengikuti proses seleksi. Temuan ini menjadi bahan pertimbangan lebih lanjut dalam menilai kesesuaian kandidat dengan kebutuhan posisi yang dilamar.';
+ }else if(topics.length&&concerns){
+  summary='Berdasarkan hasil wawancara, kami mencatat adanya aspek yang masih memerlukan pendalaman, terutama terkait '+topics.join(', ')+'. Catatan ini perlu dipertimbangkan bersama hasil penilaian lainnya sebelum menentukan kelanjutan proses seleksi.';
+ }else if(topics.length){
+  summary='Berdasarkan hasil wawancara, kami mencatat pembahasan mengenai '+topics.join(', ')+'. Informasi tersebut menjadi bahan evaluasi bersama dan perlu ditinjau dalam kaitannya dengan kebutuhan posisi yang dilamar.';
+ }else{
+  // Jangan membuat penilaian positif/negatif dari komentar yang tidak spesifik.
+  summary='Berdasarkan hasil wawancara, kami mencatat bahwa informasi dalam komentar penilaian belum cukup spesifik untuk dirumuskan sebagai kesimpulan substantif. Diperlukan penelaahan atau penjelasan tambahan agar evaluasi kandidat mencerminkan hasil wawancara secara tepat.';
  }
- return {summary};
+ return {summary,source:'local',requiresReview:true};
 }
 let alfianFinalSignaturePending='';
 function validFinalSignatureData(data){return /^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(data||'') && data.length<280000;}
@@ -175,10 +178,10 @@ $('generateAiDraft').onclick=async()=>{
   if(($('jointSummary').value.trim())&&!confirm('Ganti draf di editor dengan hasil AI? Draf yang sudah dipublikasikan tetap disimpan sampai Anda memublikasikan versi baru.'))return;
   $('jointSummary').value=result.summary;
   $('jointRecommendation').value='';
-  notify('Draf Gemini dibuat. Periksa faktanya, tentukan rekomendasi akhir sendiri, lalu publikasikan untuk persetujuan.');
+  notify('Kesimpulan Kami disusun oleh Gemini. Periksa kesesuaian dengan komentar asli, isi rekomendasi, lalu publikasikan untuk persetujuan.');
  }catch(e){if(e instanceof TypeError && /fetch/i.test(String(e.message))){notify('Cloudflare Worker tidak dapat dijangkau. Gunakan Draf Lokal (Tanpa AI) agar pekerjaan dapat berlanjut.')}else toastError(e)}finally{btn.disabled=false;btn.textContent='Rapikan Kesimpulan dengan Gemini AI'}
 };
-$('generateJointDraft').onclick=()=>{if(account.role!=='admin'||final)return;try{const result=buildJointDraft();if(($('jointSummary').value.trim())&&!confirm('Ganti isi draf saat ini? Teks yang belum dipublikasikan akan diganti.'))return;$('jointSummary').value=result.summary;$('jointRecommendation').value='';notify('Draf otomatis dibuat. Periksa, sunting, pilih rekomendasi akhir, lalu publikasikan.')}catch(e){toastError(e)}};
+$('generateJointDraft').onclick=()=>{if(account.role!=='admin'||final)return;try{const result=buildJointDraft();if(($('jointSummary').value.trim())&&!confirm('Ganti isi draf saat ini? Teks yang belum dipublikasikan akan diganti.'))return;$('jointSummary').value=result.summary;$('jointRecommendation').value='';notify('Draf lokal disusun dari tema eksplisit. Periksa terhadap seluruh komentar, perbaiki bila perlu, lalu publikasikan untuk persetujuan.');}catch(e){toastError(e)}};
 $('saveSummary').onclick=async()=>{if(account.role!=='admin'||final)return;const val={summary:$('jointSummary').value.trim(),recommendation:$('jointRecommendation').value,interviewDate:$('jointInterviewDate').value||'',versionId:crypto.randomUUID(),updatedAt:now(),updatedBy:account.uid};if(!val.summary||!val.recommendation||!/^\d{4}-\d{2}-\d{2}$/.test(val.interviewDate))return notify('Isi kesimpulan, rekomendasi, dan tanggal wawancara yang benar sebelum publikasi.');if(!reviewerIds.every(id=>assessments[id]?.completed))return notify('Tunggu sampai seluruh penilai menyelesaikan dan mengunci penilaian.');if(!confirm('Mempublikasikan versi baru akan membatalkan persetujuan atas versi sebelumnya. Lanjutkan?'))return;try{const batch=writeBatch(fire);batch.set(subref('summary','current'),val);batch.set(doc(collection(fire,'candidates',selected,'history')),{by:account.uid,action:'Draf Kami diperbarui',at:now()});await batch.commit();notify('Draf Kami versi baru dipublikasikan')}catch(e){toastError(e)}};
 $('approveSummary').onclick=async()=>{if(account?.reviewerId==='alfian')return notify('Gunakan permintaan otorisasi Super User untuk memberi persetujuan.');if(!summary||account.role!=='reviewer'||!reviewerIds.every(id=>assessments[id]?.completed))return;try{if(account.reviewerId==='alfian'&&!$('alfianFinalConsent').checked)return notify('Centang persetujuan penggunaan tanda tangan akhir.');
  const signature=alfianFinalSignaturePending || (summaryApprovals.alfian?.versionId===summary.versionId?summaryApprovals.alfian.finalSignature:'');
