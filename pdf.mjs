@@ -32,6 +32,8 @@ async function stampOriginalPages(pages,item,lib,font,bold,ink,outputDoc){
  if(!map)throw Error('Pemetaan koordinat PDF kandidat belum tersedia: '+item.candidate.name);
  const results=allResults(item.assessments,item.decisions,item.decisionApprovals||{});
  const isFinal=Boolean(item.final?.validation==='SERVER_VERIFIED_V1' && item.final?.sourceSha256===item.candidate.sha256 && item.final?.summaryVersion===item.summary?.versionId && Array.isArray(item.final?.scores)&&item.final.scores.length===9 && results.every((r,i)=>r.final===item.final.scores[i]));
+ if(item.final && !isFinal)throw Error('PDF FINAL ditolak: data finalisasi tidak cocok dengan penilaian yang tersedia.');
+ if(isFinal && (results.length!==9||results.some(r=>![1,2,3,4].includes(r.final))||!item.summary?.summary?.trim()||!item.summary?.recommendation))throw Error('PDF FINAL ditolak: ada isian wajib Wawancara 2 yang kosong.');
  for(const r of results){if(!Number.isInteger(r.final)||r.final<1||r.final>4)continue;const pos=map.rows[r.i];drawCheck(pages[pos.page],map.scoreX[r.final-1],pos.y,ink)}
  // DRAF merupakan penanda tambahan, tidak mengganti isi halaman sumber.
  if(!isFinal)for(const p of pages){p.drawText('DRAF - BELUM FINAL', {x:660,y:564,font:bold,size:10,color:lib.rgb(.75,.13,.12)})}
