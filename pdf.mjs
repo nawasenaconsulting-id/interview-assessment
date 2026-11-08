@@ -27,6 +27,50 @@ function drawJustifiedLines(page,lines,font,size,x,rightX,firstY,lineHeight,colo
  }
 }
 function drawCheck(page,x,y,color){page.drawLine({start:{x:x-3,y:y-1},end:{x:x-0.5,y:y-4},thickness:1.35,color});page.drawLine({start:{x:x-0.5,y:y-4},end:{x:x+4,y:y+4},thickness:1.35,color});}
+
+// Rapikan tanda tangan yang sudah diotorisasi HANYA saat menggambar PDF.
+// Tidak mengubah tanda tangan tersimpan, versi persetujuan, atau data Firestore.
+async function compactSignatureForPrint(dataUrl){
+  const img=await new Promise((resolve,reject)=>{
+    const image=new Image();
+    image.onload=()=>resolve(image);
+    image.onerror=()=>reject(Error('Gambar tanda tangan tidak dapat dibaca'));
+    image.src=dataUrl;
+  });
+  const w=img.naturalWidth, h=img.naturalHeight;
+  const scan=document.createElement('canvas');scan.width=w;scan.height=h;
+  const context=scan.getContext('2d',{willReadFrequently:true});
+  context.drawImage(img,0,0);
+  const rgba=context.getImageData(0,0,w,h).data;
+  let minX=w,minY=h,maxX=-1,maxY=-1;
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+    const p=(y*w+x)*4,alpha=rgba[p+3];
+    const lum=.2126*rgba[p]+.7152*rgba[p+1]+.0722*rgba[p+2];
+    if(alpha>40&&lum<205){
+      minX=Math.min(minX,x);minY=Math.min(minY,y);
+      maxX=Math.max(maxX,x);maxY=Math.max(maxY,y);
+    }
+  }
+  if(maxX<minX||maxY<minY)throw Error('Goresan tanda tangan tidak terdeteksi');
+  const pad=Math.max(4,Math.round(Math.max(maxX-minX,maxY-minY)*.025));
+  const left=Math.max(0,minX-pad), top=Math.max(0,minY-pad);
+  const right=Math.min(w,maxX+pad+1),bottom=Math.min(h,maxY+pad+1);
+  const out=document.createElement('canvas');out.width=right-left;out.height=bottom-top;
+  const target=out.getContext('2d');
+  target.drawImage(scan,left,top,right-left,bottom-top,0,0,out.width,out.height);
+  // Hapus latar putih foto/JPG agar menyatu dengan kertas formulir.
+  const pixels=target.getImageData(0,0,out.width,out.height);
+  for(let p=0;p<pixels.data.length;p+=4){
+    const r=pixels.data[p],g=pixels.data[p+1],b=pixels.data[p+2];
+    const darkness=255-(.2126*r+.7152*g+.0722*b);
+    const oldAlpha=pixels.data[p+3];
+    pixels.data[p]=0;pixels.data[p+1]=0;pixels.data[p+2]=0;
+    pixels.data[p+3]=Math.round(oldAlpha*Math.min(1,Math.max(0,(darkness-8)/165)));
+  }
+  target.putImageData(pixels,0,0);
+  return out.toDataURL('image/png');
+}
+
 async function stampOriginalPages(pages,item,lib,font,bold,ink,outputDoc){
  const id=String(item.candidate.id||'').toLowerCase();const map=pageMappings[id];
  if(!map)throw Error('Pemetaan koordinat PDF kandidat belum tersedia: '+item.candidate.name);
@@ -90,13 +134,14 @@ async function stampOriginalPages(pages,item,lib,font,bold,ink,outputDoc){
   if(consent){
    const sig=item.summaryApprovals?.alfian?.finalSignature||'';
    if(!/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(sig))throw Error('Upload tanda tangan akhir Alfian tidak tersedia/ tidak sah');
-   const picture=sig.startsWith('data:image/png')?await outputDoc.embedPng(sig):await outputDoc.embedJpg(sig);
-   const dim=picture.scaleToFit(115,30);
-   // Center signature within empty right cell, well above existing form label.
-   const signX=397, signTop=top+37;
-   page3.drawImage(picture,{x:signX,y:byTop(signTop+dim.height),width:dim.width,height:dim.height});
-   // Printed name immediately beneath uploaded signature (not beneath the form label).
-   page3.drawText('Alfian Nugraha',{x:signX,y:byTop(top+77),font:bold,size:9,color:lib.rgb(0,0,0)});
+   const trimmed=await compactSignatureForPrint(sig);
+   const picture=await outputDoc.embedPng(trimmed);
+   // Target visual sebanding dengan tanda tangan Wawancara 1 (~77 x 49 pt).
+   // Tinggi 44 pt disesuaikan dengan ruang yang tersisa sebelum nama Alfian.
+   const signX=397, signTop=top+30, signWidth=78, signHeight=44;
+   page3.drawImage(picture,{x:signX,y:byTop(signTop+signHeight),width:signWidth,height:signHeight});
+   // Nama tetap berada di bawah gambar dan di dalam kotak Wawancara 2.
+   page3.drawText('Alfian Nugraha',{x:signX,y:byTop(top+85),font:bold,size:9,color:lib.rgb(0,0,0)});
   }
  return {consent,isFinal};
 }
